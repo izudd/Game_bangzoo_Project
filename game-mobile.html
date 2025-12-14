@@ -1,0 +1,1008 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Survival Game Mobile Pro</title>
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIlN1cnZpdmFsIEdhbWUgUHJvIiwKICAic2hvcnRfbmFtZSI6ICJTdXJ2aXZhbCIsCiAgInN0YXJ0X3VybCI6ICIuLyIsCiAgImRpc3BsYXkiOiAiZnVsbHNjcmVlbiIsCiAgImJhY2tncm91bmRfY29sb3IiOiAiIzFhMWEyZSIsCiAgInRoZW1lX2NvbG9yIjogIiMxYTFhMmUiLAogICJvcmllbnRhdGlvbiI6ICJsYW5kc2NhcGUiLAogICJpY29ucyI6IFtdCn0=">
+    
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        body {
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background: #1a1a2e;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Arial', sans-serif;
+            touch-action: none;
+            position: fixed;
+        }
+        #game-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        canvas {
+            display: block;
+            width: 100% !important;
+            height: 100% !important;
+        }
+        
+        /* Fullscreen Button */
+        #fullscreenBtn {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px 40px;
+            border: none;
+            border-radius: 15px;
+            font-size: 24px;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 10000;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            transition: transform 0.2s;
+        }
+        #fullscreenBtn:active {
+            transform: translate(-50%, -50%) scale(0.95);
+        }
+        
+        /* Orientation Warning */
+        #orientationWarning {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: #1a1a2e;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            color: white;
+            text-align: center;
+            padding: 20px;
+        }
+        #orientationWarning.show {
+            display: flex;
+        }
+        .rotate-icon {
+            font-size: 80px;
+            margin-bottom: 20px;
+            animation: rotate 2s infinite;
+        }
+        @keyframes rotate {
+            0%, 100% { transform: rotate(0deg); }
+            50% { transform: rotate(90deg); }
+        }
+        
+        /* Install prompt */
+        #installPrompt {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(52, 152, 219, 0.95);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 10px;
+            font-size: 16px;
+            z-index: 10000;
+            display: none;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        #installPrompt button {
+            background: white;
+            color: #3498db;
+            border: none;
+            padding: 8px 20px;
+            margin-left: 15px;
+            border-radius: 5px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <!-- Fullscreen Button -->
+    <button id="fullscreenBtn" onclick="enterFullscreen()">
+        🎮 TAP TO START<br>
+        <span style="font-size: 16px;">Fullscreen Mode</span>
+    </button>
+    
+    <!-- Orientation Warning -->
+    <div id="orientationWarning">
+        <div class="rotate-icon">📱➡️</div>
+        <h2>Putar HP ke Landscape!</h2>
+        <p style="margin-top: 10px; opacity: 0.8;">Game dimainkan dalam mode horizontal</p>
+    </div>
+    
+    <div id="game-container"></div>
+    
+    <div id="installPrompt">
+        📱 Install game sebagai app!
+        <button onclick="installApp()">Install</button>
+        <button onclick="hideInstallPrompt()">Nanti</button>
+    </div>
+
+    <script>
+        // ===== FULLSCREEN & ORIENTATION MANAGEMENT =====
+        let gameStarted = false;
+        
+        function enterFullscreen() {
+            const elem = document.documentElement;
+            
+            // Request fullscreen
+            if (elem.requestFullscreen) {
+                elem.requestFullscreen();
+            } else if (elem.webkitRequestFullscreen) { // Safari
+                elem.webkitRequestFullscreen();
+            } else if (elem.msRequestFullscreen) { // IE11
+                elem.msRequestFullscreen();
+            }
+            
+            // Lock orientation to landscape
+            lockOrientation();
+            
+            // Hide button and start game
+            document.getElementById('fullscreenBtn').style.display = 'none';
+            gameStarted = true;
+            
+            // Start the game
+            if (typeof startGame === 'function') {
+                startGame();
+            }
+        }
+        
+        function lockOrientation() {
+            try {
+                if (screen.orientation && screen.orientation.lock) {
+                    screen.orientation.lock('landscape').catch(err => {
+                        console.log('Orientation lock error:', err);
+                    });
+                } else if (screen.lockOrientation) {
+                    screen.lockOrientation('landscape');
+                } else if (screen.mozLockOrientation) {
+                    screen.mozLockOrientation('landscape');
+                } else if (screen.msLockOrientation) {
+                    screen.msLockOrientation('landscape');
+                }
+            } catch (err) {
+                console.log('Lock orientation not supported:', err);
+            }
+        }
+        
+        // Check orientation
+        function checkOrientation() {
+            if (!gameStarted) return;
+            
+            const isLandscape = window.innerWidth > window.innerHeight;
+            const warning = document.getElementById('orientationWarning');
+            
+            if (!isLandscape) {
+                warning.classList.add('show');
+            } else {
+                warning.classList.remove('show');
+            }
+        }
+        
+        window.addEventListener('resize', checkOrientation);
+        window.addEventListener('orientationchange', checkOrientation);
+        
+        // ===== VIBRATION API =====
+        function vibrate(pattern) {
+            if ('vibrate' in navigator) {
+                navigator.vibrate(pattern);
+            }
+        }
+        
+        // Vibration patterns
+        const VIBRATE = {
+            hit: [20],           // Quick tap
+            attack: [30],        // Medium tap
+            damage: [50, 30, 50], // Double tap
+            collect: [15],       // Soft tap
+            death: [100, 50, 100, 50, 200] // Long pattern
+        };
+
+        // ===== PWA INSTALL =====
+        let deferredPrompt;
+        
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            if (gameStarted) {
+                document.getElementById('installPrompt').style.display = 'block';
+            }
+        });
+
+        function installApp() {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then((choiceResult) => {
+                    deferredPrompt = null;
+                    hideInstallPrompt();
+                });
+            }
+        }
+
+        function hideInstallPrompt() {
+            document.getElementById('installPrompt').style.display = 'none';
+        }
+
+        // ===== DETECT MOBILE =====
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        const screenWidth = window.innerWidth;
+        const screenHeight = window.innerHeight;
+
+        // ===== GAME CONFIG =====
+        const config = {
+            type: Phaser.AUTO,
+            width: screenWidth,
+            height: screenHeight,
+            parent: 'game-container',
+            backgroundColor: '#2d5016',
+            physics: {
+                default: 'arcade',
+                arcade: {
+                    gravity: { y: 0 },
+                    debug: false
+                }
+            },
+            scale: {
+                mode: Phaser.Scale.FIT,
+                autoCenter: Phaser.Scale.CENTER_BOTH
+            },
+            scene: {
+                preload: preload,
+                create: create,
+                update: update
+            }
+        };
+
+        let game;
+        
+        function startGame() {
+            if (!game) {
+                game = new Phaser.Game(config);
+            }
+        }
+
+        // ===== GLOBAL VARIABLES =====
+        let player;
+        let cursors;
+        let trees, rocks, berries, enemies;
+        
+        // Mobile controls
+        let joystick;
+        let attackBtn, eatBtn, craftBtn;
+        let mobileControls = { x: 0, y: 0 };
+        
+        // Player stats
+        let playerStats = {
+            health: 100,
+            hunger: 100,
+            wood: 0,
+            stone: 0,
+            food: 0,
+            hasAxe: false,
+            hasSpear: false,
+            currentWeapon: null
+        };
+
+        // UI elements
+        let healthBar, hungerBar;
+        let healthText, hungerText;
+        let inventoryText, messageText;
+        let dayNightOverlay;
+        let craftingPanel;
+
+        // Time system
+        let gameTime = 0;
+        let isDay = true;
+
+        // ===== PRELOAD =====
+        function preload() {
+            // Nothing to preload
+        }
+
+        // ===== CREATE =====
+        function create() {
+            // World bounds
+            this.physics.world.setBounds(0, 0, 2000, 1500);
+
+            // Create player
+            createPlayer(this);
+
+            // Create resources
+            createResources(this);
+
+            // Create enemies
+            createEnemies(this);
+
+            // Create UI
+            createUI(this);
+
+            // Mobile controls
+            if (isMobile) {
+                createMobileControls(this);
+            } else {
+                // Desktop controls
+                cursors = this.input.keyboard.createCursorKeys();
+                this.wasd = this.input.keyboard.addKeys({
+                    up: Phaser.Input.Keyboard.KeyCodes.W,
+                    down: Phaser.Input.Keyboard.KeyCodes.S,
+                    left: Phaser.Input.Keyboard.KeyCodes.A,
+                    right: Phaser.Input.Keyboard.KeyCodes.D
+                });
+                this.input.keyboard.on('keydown-E', () => eatFood());
+                this.input.keyboard.on('keydown-C', () => toggleCrafting());
+                this.input.keyboard.on('keydown-SPACE', () => attack(this));
+            }
+
+            // Camera
+            this.cameras.main.startFollow(player);
+            this.cameras.main.setBounds(0, 0, 2000, 1500);
+
+            // Check orientation
+            checkOrientation();
+            
+            vibrate(VIBRATE.collect); // Welcome vibration
+            showMessage('🎮 Selamat Datang! Survive as long as you can!');
+        }
+
+        // ===== CREATE MOBILE CONTROLS =====
+        function createMobileControls(scene) {
+            const buttonSize = Math.min(screenWidth, screenHeight) * 0.12;
+            const joystickSize = Math.min(screenWidth, screenHeight) * 0.15;
+
+            // Virtual Joystick
+            const joystickX = joystickSize + 30;
+            const joystickY = screenHeight - joystickSize - 30;
+
+            // Joystick base
+            const joystickBase = scene.add.circle(joystickX, joystickY, joystickSize, 0x34495e, 0.3)
+                .setScrollFactor(0)
+                .setDepth(500);
+
+            // Joystick stick
+            joystick = scene.add.circle(joystickX, joystickY, joystickSize * 0.5, 0x3498db, 0.7)
+                .setScrollFactor(0)
+                .setDepth(501)
+                .setInteractive({ draggable: true });
+
+            const joystickStartX = joystickX;
+            const joystickStartY = joystickY;
+
+            joystick.on('drag', (pointer, dragX, dragY) => {
+                const distance = Phaser.Math.Distance.Between(joystickStartX, joystickStartY, dragX, dragY);
+                const maxDistance = joystickSize * 0.8;
+
+                if (distance < maxDistance) {
+                    joystick.x = dragX;
+                    joystick.y = dragY;
+                } else {
+                    const angle = Phaser.Math.Angle.Between(joystickStartX, joystickStartY, dragX, dragY);
+                    joystick.x = joystickStartX + Math.cos(angle) * maxDistance;
+                    joystick.y = joystickStartY + Math.sin(angle) * maxDistance;
+                }
+
+                mobileControls.x = (joystick.x - joystickStartX) / maxDistance;
+                mobileControls.y = (joystick.y - joystickStartY) / maxDistance;
+            });
+
+            joystick.on('dragend', () => {
+                joystick.x = joystickStartX;
+                joystick.y = joystickStartY;
+                mobileControls.x = 0;
+                mobileControls.y = 0;
+            });
+
+            // Action buttons (right side)
+            const btnSpacing = buttonSize + 20;
+            const btnStartX = screenWidth - buttonSize - 30;
+            const btnStartY = screenHeight - buttonSize - 30;
+
+            // Attack button
+            attackBtn = createButton(scene, btnStartX, btnStartY - btnSpacing, buttonSize, '⚔️', 0xe74c3c);
+            attackBtn.on('pointerdown', () => {
+                attack(scene);
+                vibrate(VIBRATE.attack); // VIBRATE on attack!
+            });
+
+            // Eat button
+            eatBtn = createButton(scene, btnStartX, btnStartY, buttonSize, '🍎', 0xf39c12);
+            eatBtn.on('pointerdown', () => {
+                eatFood();
+                vibrate(VIBRATE.collect); // VIBRATE on eat!
+            });
+
+            // Craft button (top right)
+            craftBtn = createButton(scene, screenWidth - buttonSize - 20, buttonSize + 20, buttonSize * 0.8, '🔨', 0x27ae60);
+            craftBtn.on('pointerdown', () => {
+                toggleCrafting();
+                vibrate(VIBRATE.hit); // VIBRATE on menu!
+            });
+
+            // Weapon switch buttons
+            const weaponBtn1 = createButton(scene, btnStartX - btnSpacing, btnStartY - btnSpacing, buttonSize * 0.7, '🪓', 0x8b4513);
+            weaponBtn1.on('pointerdown', () => {
+                equipWeapon('axe');
+                vibrate(VIBRATE.hit);
+            });
+
+            const weaponBtn2 = createButton(scene, btnStartX - btnSpacing, btnStartY, buttonSize * 0.7, '🔱', 0x16a085);
+            weaponBtn2.on('pointerdown', () => {
+                equipWeapon('spear');
+                vibrate(VIBRATE.hit);
+            });
+        }
+
+        function createButton(scene, x, y, size, emoji, color) {
+            const button = scene.add.circle(x, y, size, color, 0.6)
+                .setScrollFactor(0)
+                .setDepth(500)
+                .setInteractive();
+
+            const text = scene.add.text(x, y, emoji, {
+                fontSize: Math.floor(size * 0.8) + 'px'
+            })
+            .setOrigin(0.5)
+            .setScrollFactor(0)
+            .setDepth(501);
+
+            button.on('pointerdown', () => {
+                button.setAlpha(1);
+                button.setScale(0.9);
+            });
+
+            button.on('pointerup', () => {
+                button.setAlpha(0.6);
+                button.setScale(1);
+            });
+
+            return button;
+        }
+
+        // ===== CREATE PLAYER =====
+        function createPlayer(scene) {
+            const graphics = scene.add.graphics();
+            graphics.fillStyle(0x3498db, 1);
+            graphics.fillCircle(16, 16, 15);
+            graphics.fillStyle(0xffffff, 1);
+            graphics.fillCircle(10, 12, 3);
+            graphics.fillCircle(22, 12, 3);
+            graphics.lineStyle(2, 0xffffff);
+            graphics.beginPath();
+            graphics.arc(16, 16, 8, 0.2, Math.PI - 0.2);
+            graphics.strokePath();
+            graphics.generateTexture('player', 32, 32);
+            graphics.destroy();
+
+            player = scene.physics.add.sprite(500, 500, 'player');
+            player.setCollideWorldBounds(true);
+            player.body.setSize(28, 28);
+        }
+
+        // ===== CREATE RESOURCES =====
+        function createResources(scene) {
+            // Trees
+            const treeGraphics = scene.add.graphics();
+            treeGraphics.fillStyle(0x27ae60, 1);
+            treeGraphics.fillCircle(20, 15, 15);
+            treeGraphics.fillStyle(0x8b4513, 1);
+            treeGraphics.fillRect(16, 25, 8, 15);
+            treeGraphics.generateTexture('tree', 40, 40);
+            treeGraphics.destroy();
+
+            trees = scene.physics.add.group();
+            for (let i = 0; i < 30; i++) {
+                const tree = trees.create(
+                    Phaser.Math.Between(100, 1900),
+                    Phaser.Math.Between(100, 1400),
+                    'tree'
+                );
+                tree.setImmovable(true);
+                tree.health = 3;
+            }
+
+            // Rocks
+            const rockGraphics = scene.add.graphics();
+            rockGraphics.fillStyle(0x7f8c8d, 1);
+            rockGraphics.fillCircle(15, 15, 12);
+            rockGraphics.fillStyle(0x95a5a6, 1);
+            rockGraphics.fillCircle(10, 12, 6);
+            rockGraphics.generateTexture('rock', 30, 30);
+            rockGraphics.destroy();
+
+            rocks = scene.physics.add.group();
+            for (let i = 0; i < 25; i++) {
+                const rock = rocks.create(
+                    Phaser.Math.Between(100, 1900),
+                    Phaser.Math.Between(100, 1400),
+                    'rock'
+                );
+                rock.setImmovable(true);
+                rock.health = 2;
+            }
+
+            // Berries
+            const berryGraphics = scene.add.graphics();
+            berryGraphics.fillStyle(0xe74c3c, 1);
+            berryGraphics.fillCircle(10, 10, 8);
+            berryGraphics.fillCircle(16, 12, 6);
+            berryGraphics.fillCircle(8, 16, 6);
+            berryGraphics.generateTexture('berry', 25, 25);
+            berryGraphics.destroy();
+
+            berries = scene.physics.add.group();
+            for (let i = 0; i < 20; i++) {
+                const berry = berries.create(
+                    Phaser.Math.Between(100, 1900),
+                    Phaser.Math.Between(100, 1400),
+                    'berry'
+                );
+                berry.setImmovable(true);
+            }
+
+            scene.physics.add.overlap(player, trees, collectResource, null, scene);
+            scene.physics.add.overlap(player, rocks, collectResource, null, scene);
+            scene.physics.add.overlap(player, berries, collectResource, null, scene);
+        }
+
+        // ===== CREATE ENEMIES =====
+        function createEnemies(scene) {
+            const enemyGraphics = scene.add.graphics();
+            enemyGraphics.fillStyle(0xe74c3c, 1);
+            enemyGraphics.fillCircle(12, 12, 10);
+            enemyGraphics.fillStyle(0xffffff, 1);
+            enemyGraphics.fillCircle(8, 10, 2);
+            enemyGraphics.fillCircle(16, 10, 2);
+            enemyGraphics.fillStyle(0xff0000, 1);
+            enemyGraphics.fillTriangle(12, 18, 8, 14, 16, 14);
+            enemyGraphics.generateTexture('enemy', 24, 24);
+            enemyGraphics.destroy();
+
+            enemies = scene.physics.add.group();
+            spawnEnemies(scene, 3);
+
+            scene.physics.add.overlap(player, enemies, hitByEnemy, null, scene);
+        }
+
+        function spawnEnemies(scene, count) {
+            for (let i = 0; i < count; i++) {
+                const enemy = enemies.create(
+                    Phaser.Math.Between(100, 1900),
+                    Phaser.Math.Between(100, 1400),
+                    'enemy'
+                );
+                enemy.health = 2;
+                enemy.speed = 80;
+            }
+        }
+
+        // ===== CREATE UI =====
+        function createUI(scene) {
+            const fontSize = Math.max(12, screenWidth * 0.02);
+            const barWidth = Math.min(200, screenWidth * 0.25);
+
+            // Health bar
+            const healthBarBg = scene.add.rectangle(10, 10, barWidth + 4, 20, 0x000000, 0.7).setOrigin(0, 0).setScrollFactor(0);
+            healthBar = scene.add.rectangle(12, 12, barWidth, 16, 0xe74c3c).setOrigin(0, 0).setScrollFactor(0);
+            healthText = scene.add.text(15, 14, 'HP: 100', {
+                fontSize: fontSize + 'px',
+                fill: '#fff',
+                fontStyle: 'bold'
+            }).setOrigin(0, 0).setScrollFactor(0);
+
+            // Hunger bar
+            const hungerBarBg = scene.add.rectangle(10, 35, barWidth + 4, 20, 0x000000, 0.7).setOrigin(0, 0).setScrollFactor(0);
+            hungerBar = scene.add.rectangle(12, 37, barWidth, 16, 0xf39c12).setOrigin(0, 0).setScrollFactor(0);
+            hungerText = scene.add.text(15, 39, 'Hunger: 100', {
+                fontSize: fontSize + 'px',
+                fill: '#fff',
+                fontStyle: 'bold'
+            }).setOrigin(0, 0).setScrollFactor(0);
+
+            // Inventory
+            inventoryText = scene.add.text(10, 65, '', {
+                fontSize: (fontSize - 2) + 'px',
+                fill: '#fff',
+                backgroundColor: 'rgba(0,0,0,0.7)',
+                padding: { x: 8, y: 5 }
+            }).setOrigin(0, 0).setScrollFactor(0);
+
+            // Message
+            messageText = scene.add.text(screenWidth / 2, 20, '', {
+                fontSize: (fontSize + 2) + 'px',
+                fill: '#f1c40f',
+                backgroundColor: 'rgba(0,0,0,0.8)',
+                padding: { x: 12, y: 6 }
+            }).setOrigin(0.5, 0).setScrollFactor(0);
+
+            // Day/Night overlay
+            dayNightOverlay = scene.add.rectangle(0, 0, screenWidth, screenHeight, 0x000033, 0)
+                .setOrigin(0, 0)
+                .setScrollFactor(0)
+                .setDepth(100);
+
+            // Time display
+            scene.add.text(screenWidth - 10, 10, '', {
+                fontSize: fontSize + 'px',
+                fill: '#fff',
+                backgroundColor: 'rgba(0,0,0,0.7)',
+                padding: { x: 8, y: 5 }
+            }).setOrigin(1, 0).setScrollFactor(0).setName('timeText');
+
+            createCraftingPanel(scene);
+            updateInventoryUI();
+        }
+
+        function createCraftingPanel(scene) {
+            const panelWidth = Math.min(400, screenWidth * 0.9);
+            const panelHeight = Math.min(400, screenHeight * 0.7);
+            const panelX = (screenWidth - panelWidth) / 2;
+            const panelY = (screenHeight - panelHeight) / 2;
+
+            craftingPanel = scene.add.container(panelX, panelY).setScrollFactor(0).setDepth(200).setVisible(false);
+
+            const bg = scene.add.rectangle(0, 0, panelWidth, panelHeight, 0x2c3e50, 0.95).setOrigin(0, 0);
+            const border = scene.add.rectangle(0, 0, panelWidth, panelHeight, 0x34495e).setOrigin(0, 0).setStrokeStyle(3, 0x3498db);
+            
+            const title = scene.add.text(panelWidth / 2, 20, '🔨 CRAFTING', {
+                fontSize: '20px',
+                fill: '#fff',
+                fontStyle: 'bold'
+            }).setOrigin(0.5, 0);
+
+            const recipes = [
+                { name: 'Axe', wood: 5, stone: 3, item: 'axe', emoji: '🪓' },
+                { name: 'Spear', wood: 8, stone: 2, item: 'spear', emoji: '🔱' }
+            ];
+
+            let yPos = 70;
+            recipes.forEach((recipe) => {
+                const recipeContainer = scene.add.container(15, yPos);
+                
+                const recipeBg = scene.add.rectangle(0, 0, panelWidth - 30, 65, 0x34495e, 0.5).setOrigin(0, 0);
+                
+                const recipeText = scene.add.text(10, 10, 
+                    `${recipe.emoji} ${recipe.name}\n🪵${recipe.wood} 🪨${recipe.stone}`, 
+                    { fontSize: '14px', fill: '#fff' }
+                ).setOrigin(0, 0);
+
+                const craftBtn = scene.add.text(panelWidth - 100, 25, 'CRAFT', {
+                    fontSize: '16px',
+                    fill: '#fff',
+                    backgroundColor: '#27ae60',
+                    padding: { x: 12, y: 6 }
+                }).setOrigin(0, 0.5).setInteractive({ useHandCursor: true });
+
+                craftBtn.on('pointerdown', () => {
+                    craftItem(recipe);
+                    vibrate(VIBRATE.collect); // VIBRATE on craft!
+                });
+
+                recipeContainer.add([recipeBg, recipeText, craftBtn]);
+                craftingPanel.add(recipeContainer);
+
+                yPos += 80;
+            });
+
+            const closeBtn = scene.add.text(panelWidth / 2, panelHeight - 40, 'CLOSE', {
+                fontSize: '18px',
+                fill: '#fff',
+                backgroundColor: '#e74c3c',
+                padding: { x: 20, y: 8 }
+            }).setOrigin(0.5, 0).setInteractive({ useHandCursor: true });
+
+            closeBtn.on('pointerdown', () => {
+                toggleCrafting();
+                vibrate(VIBRATE.hit);
+            });
+
+            craftingPanel.add([bg, border, title, closeBtn]);
+        }
+
+        // ===== UPDATE LOOP =====
+        function update(time, delta) {
+            if (playerStats.health <= 0) {
+                gameOver(this);
+                return;
+            }
+
+            // Player movement
+            player.setVelocity(0);
+
+            const speed = 200;
+
+            if (isMobile) {
+                if (Math.abs(mobileControls.x) > 0.1 || Math.abs(mobileControls.y) > 0.1) {
+                    player.setVelocity(
+                        mobileControls.x * speed,
+                        mobileControls.y * speed
+                    );
+                }
+            } else {
+                if (cursors.left.isDown || this.wasd.left.isDown) {
+                    player.setVelocityX(-speed);
+                } else if (cursors.right.isDown || this.wasd.right.isDown) {
+                    player.setVelocityX(speed);
+                }
+
+                if (cursors.up.isDown || this.wasd.up.isDown) {
+                    player.setVelocityY(-speed);
+                } else if (cursors.down.isDown || this.wasd.down.isDown) {
+                    player.setVelocityY(speed);
+                }
+            }
+
+            player.body.velocity.normalize().scale(speed);
+
+            // Enemy AI
+            enemies.children.entries.forEach(enemy => {
+                if (!enemy.active) return;
+
+                const distance = Phaser.Math.Distance.Between(player.x, player.y, enemy.x, enemy.y);
+                
+                if (distance < 300 && (!isDay || distance < 100)) {
+                    this.physics.moveToObject(enemy, player, enemy.speed);
+                } else {
+                    enemy.setVelocity(0);
+                }
+            });
+
+            // Day/Night cycle
+            gameTime += delta;
+            const dayLength = 60000;
+            const timeOfDay = (gameTime % dayLength) / dayLength;
+            
+            if (timeOfDay < 0.5) {
+                isDay = true;
+                dayNightOverlay.setAlpha(timeOfDay * 0.3);
+            } else {
+                isDay = false;
+                const nightIntensity = (timeOfDay - 0.5) * 2;
+                dayNightOverlay.setAlpha(0.15 + nightIntensity * 0.55);
+                
+                if (timeOfDay > 0.7 && enemies.getLength() < 8 && Math.random() < 0.01) {
+                    spawnEnemies(this, 1);
+                }
+            }
+
+            const hours = Math.floor(timeOfDay * 24);
+            const timeText = this.children.getByName('timeText');
+            if (timeText) {
+                timeText.setText(`${isDay ? '☀️' : '🌙'} ${hours}:00`);
+            }
+
+            // Hunger
+            if (Math.random() < 0.001) {
+                playerStats.hunger = Math.max(0, playerStats.hunger - 1);
+                updateStatsUI();
+                
+                if (playerStats.hunger === 0 && Math.random() < 0.01) {
+                    playerStats.health = Math.max(0, playerStats.health - 2);
+                    updateStatsUI();
+                    vibrate(VIBRATE.damage); // VIBRATE on starvation!
+                    showMessage('⚠️ Kelaparan!');
+                }
+            }
+        }
+
+        // ===== GAME FUNCTIONS =====
+        function collectResource(player, resource) {
+            const resourceType = resource.texture.key;
+
+            if (resourceType === 'tree') {
+                if (resource.health > 0) {
+                    resource.health--;
+                    vibrate(VIBRATE.hit); // VIBRATE on hit!
+                    if (resource.health === 0) {
+                        playerStats.wood += playerStats.hasAxe ? 5 : 2;
+                        vibrate(VIBRATE.collect); // VIBRATE on collect!
+                        showMessage(`+${playerStats.hasAxe ? 5 : 2} 🪵`);
+                        resource.destroy();
+                    }
+                }
+            } else if (resourceType === 'rock') {
+                if (resource.health > 0) {
+                    resource.health--;
+                    vibrate(VIBRATE.hit); // VIBRATE on hit!
+                    if (resource.health === 0) {
+                        playerStats.stone += 3;
+                        vibrate(VIBRATE.collect); // VIBRATE on collect!
+                        showMessage('+3 🪨');
+                        resource.destroy();
+                    }
+                }
+            } else if (resourceType === 'berry') {
+                playerStats.food += 3;
+                vibrate(VIBRATE.collect); // VIBRATE on collect!
+                showMessage('+3 🍎');
+                resource.destroy();
+            }
+
+            updateInventoryUI();
+        }
+
+        function attack(scene) {
+            if (!playerStats.currentWeapon) {
+                showMessage('⚠️ Equip weapon dulu!');
+                return;
+            }
+
+            const attackRange = playerStats.currentWeapon === 'spear' ? 80 : 50;
+            const damage = playerStats.currentWeapon === 'spear' ? 2 : 1;
+
+            let hitSomething = false;
+
+            enemies.children.entries.forEach(enemy => {
+                if (!enemy.active) return;
+                
+                const distance = Phaser.Math.Distance.Between(player.x, player.y, enemy.x, enemy.y);
+                if (distance < attackRange) {
+                    hitSomething = true;
+                    enemy.health -= damage;
+                    
+                    const angle = Phaser.Math.Angle.Between(player.x, player.y, enemy.x, enemy.y);
+                    enemy.setVelocity(Math.cos(angle) * 300, Math.sin(angle) * 300);
+                    
+                    if (enemy.health <= 0) {
+                        enemy.destroy();
+                        playerStats.food += 2;
+                        vibrate(VIBRATE.attack); // VIBRATE on kill!
+                        showMessage('💀 +2 🍎');
+                        updateInventoryUI();
+                    } else {
+                        vibrate(VIBRATE.hit); // VIBRATE on hit!
+                        showMessage(`⚔️ Hit!`);
+                    }
+                }
+            });
+
+            if (!hitSomething) {
+                vibrate([10]); // Small vibrate for miss
+            }
+        }
+
+        function hitByEnemy(player, enemy) {
+            if (Math.random() < 0.02) {
+                playerStats.health = Math.max(0, playerStats.health - 10);
+                updateStatsUI();
+                vibrate(VIBRATE.damage); // VIBRATE on damage!
+                showMessage('💥 -10 HP!');
+                
+                const angle = Phaser.Math.Angle.Between(enemy.x, enemy.y, player.x, player.y);
+                player.setVelocity(Math.cos(angle) * 200, Math.sin(angle) * 200);
+            }
+        }
+
+        function eatFood() {
+            if (playerStats.food > 0) {
+                playerStats.food--;
+                playerStats.hunger = Math.min(100, playerStats.hunger + 30);
+                updateInventoryUI();
+                updateStatsUI();
+                showMessage('🍎 +30 Hunger');
+            } else {
+                showMessage('⚠️ Gak ada makanan!');
+            }
+        }
+
+        function toggleCrafting() {
+            craftingPanel.setVisible(!craftingPanel.visible);
+        }
+
+        function craftItem(recipe) {
+            if (playerStats.wood >= recipe.wood && playerStats.stone >= recipe.stone) {
+                playerStats.wood -= recipe.wood;
+                playerStats.stone -= recipe.stone;
+                
+                if (recipe.item === 'axe') {
+                    playerStats.hasAxe = true;
+                    showMessage('🪓 Axe crafted!');
+                } else if (recipe.item === 'spear') {
+                    playerStats.hasSpear = true;
+                    showMessage('🔱 Spear crafted!');
+                }
+                
+                updateInventoryUI();
+            } else {
+                vibrate([30, 20, 30]); // Error vibration
+                showMessage('⚠️ Not enough!');
+            }
+        }
+
+        function equipWeapon(weapon) {
+            if (weapon === 'axe' && playerStats.hasAxe) {
+                playerStats.currentWeapon = 'axe';
+                showMessage('🪓 Axe equipped!');
+            } else if (weapon === 'spear' && playerStats.hasSpear) {
+                playerStats.currentWeapon = 'spear';
+                showMessage('🔱 Spear equipped!');
+            } else {
+                showMessage('⚠️ Craft dulu!');
+            }
+        }
+
+        function updateStatsUI() {
+            const barWidth = Math.min(200, screenWidth * 0.25);
+            healthBar.width = (playerStats.health / 100) * barWidth;
+            healthText.setText(`HP: ${playerStats.health}`);
+            
+            hungerBar.width = (playerStats.hunger / 100) * barWidth;
+            hungerText.setText(`Hunger: ${playerStats.hunger}`);
+        }
+
+        function updateInventoryUI() {
+            inventoryText.setText(
+                `🪵 ${playerStats.wood} | 🪨 ${playerStats.stone} | 🍎 ${playerStats.food}\n` +
+                `${playerStats.hasAxe ? '🪓' : '⬜'} | ${playerStats.hasSpear ? '🔱' : '⬜'}`
+            );
+        }
+
+        function showMessage(text) {
+            messageText.setText(text);
+            setTimeout(() => {
+                if (messageText.text === text) {
+                    messageText.setText('');
+                }
+            }, 2000);
+        }
+
+        function gameOver(scene) {
+            scene.physics.pause();
+            vibrate(VIBRATE.death); // VIBRATE on death!
+            
+            const overlay = scene.add.rectangle(0, 0, screenWidth, screenHeight, 0x000000, 0.8)
+                .setOrigin(0, 0)
+                .setScrollFactor(0)
+                .setDepth(300);
+            
+            const gameOverText = scene.add.text(screenWidth / 2, screenHeight / 2 - 50, '💀 GAME OVER', {
+                fontSize: '48px',
+                fill: '#e74c3c',
+                fontStyle: 'bold'
+            }).setOrigin(0.5).setScrollFactor(0).setDepth(301);
+
+            const statsText = scene.add.text(screenWidth / 2, screenHeight / 2 + 20,
+                `Survived: ${Math.floor(gameTime / 1000)}s\n🪵 ${playerStats.wood} | 🪨 ${playerStats.stone}`,
+                {
+                    fontSize: '20px',
+                    fill: '#fff',
+                    align: 'center'
+                }
+            ).setOrigin(0.5).setScrollFactor(0).setDepth(301);
+
+            const restartText = scene.add.text(screenWidth / 2, screenHeight / 2 + 100, 'Refresh untuk restart', {
+                fontSize: '18px',
+                fill: '#f1c40f'
+            }).setOrigin(0.5).setScrollFactor(0).setDepth(301);
+        }
+    </script>
+</body>
+</html>
