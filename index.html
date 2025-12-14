@@ -8,9 +8,6 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Survival Game Mobile Pro</title>
     
-    <!-- PWA Manifest -->
-    <link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIlN1cnZpdmFsIEdhbWUgUHJvIiwKICAic2hvcnRfbmFtZSI6ICJTdXJ2aXZhbCIsCiAgInN0YXJ0X3VybCI6ICIuLyIsCiAgImRpc3BsYXkiOiAiZnVsbHNjcmVlbiIsCiAgImJhY2tncm91bmRfY29sb3IiOiAiIzFhMWEyZSIsCiAgInRoZW1lX2NvbG9yIjogIiMxYTFhMmUiLAogICJvcmllbnRhdGlvbiI6ICJsYW5kc2NhcGUiLAogICJpY29ucyI6IFtdCn0=">
-    
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.js"></script>
     <style>
         * {
@@ -26,7 +23,7 @@
             width: 100vw;
             height: 100vh;
             overflow: hidden;
-            background: #1a1a2e;
+            background: #000000;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -40,11 +37,13 @@
             display: flex;
             justify-content: center;
             align-items: center;
+            background: #000000;
         }
         canvas {
             display: block;
-            width: 100% !important;
-            height: 100% !important;
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
         }
         
         /* Fullscreen Button */
@@ -98,32 +97,6 @@
             0%, 100% { transform: rotate(0deg); }
             50% { transform: rotate(90deg); }
         }
-        
-        /* Install prompt */
-        #installPrompt {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(52, 152, 219, 0.95);
-            color: white;
-            padding: 15px 25px;
-            border-radius: 10px;
-            font-size: 16px;
-            z-index: 10000;
-            display: none;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-        }
-        #installPrompt button {
-            background: white;
-            color: #3498db;
-            border: none;
-            padding: 8px 20px;
-            margin-left: 15px;
-            border-radius: 5px;
-            font-weight: bold;
-            cursor: pointer;
-        }
     </style>
 </head>
 <body>
@@ -141,12 +114,6 @@
     </div>
     
     <div id="game-container"></div>
-    
-    <div id="installPrompt">
-        📱 Install game sebagai app!
-        <button onclick="installApp()">Install</button>
-        <button onclick="hideInstallPrompt()">Nanti</button>
-    </div>
 
     <script>
         // ===== FULLSCREEN & ORIENTATION MANAGEMENT =====
@@ -155,23 +122,18 @@
         function enterFullscreen() {
             const elem = document.documentElement;
             
-            // Request fullscreen
             if (elem.requestFullscreen) {
                 elem.requestFullscreen();
-            } else if (elem.webkitRequestFullscreen) { // Safari
+            } else if (elem.webkitRequestFullscreen) {
                 elem.webkitRequestFullscreen();
-            } else if (elem.msRequestFullscreen) { // IE11
+            } else if (elem.msRequestFullscreen) {
                 elem.msRequestFullscreen();
             }
             
-            // Lock orientation to landscape
             lockOrientation();
-            
-            // Hide button and start game
             document.getElementById('fullscreenBtn').style.display = 'none';
             gameStarted = true;
             
-            // Start the game
             if (typeof startGame === 'function') {
                 startGame();
             }
@@ -183,19 +145,12 @@
                     screen.orientation.lock('landscape').catch(err => {
                         console.log('Orientation lock error:', err);
                     });
-                } else if (screen.lockOrientation) {
-                    screen.lockOrientation('landscape');
-                } else if (screen.mozLockOrientation) {
-                    screen.mozLockOrientation('landscape');
-                } else if (screen.msLockOrientation) {
-                    screen.msLockOrientation('landscape');
                 }
             } catch (err) {
                 console.log('Lock orientation not supported:', err);
             }
         }
         
-        // Check orientation
         function checkOrientation() {
             if (!gameStarted) return;
             
@@ -219,50 +174,49 @@
             }
         }
         
-        // Vibration patterns
         const VIBRATE = {
-            hit: [20],           // Quick tap
-            attack: [30],        // Medium tap
-            damage: [50, 30, 50], // Double tap
-            collect: [15],       // Soft tap
-            death: [100, 50, 100, 50, 200] // Long pattern
+            hit: [20],
+            attack: [30],
+            damage: [50, 30, 50],
+            collect: [15],
+            death: [100, 50, 100, 50, 200]
         };
 
-        // ===== PWA INSTALL =====
-        let deferredPrompt;
-        
-        window.addEventListener('beforeinstallprompt', (e) => {
-            e.preventDefault();
-            deferredPrompt = e;
-            if (gameStarted) {
-                document.getElementById('installPrompt').style.display = 'block';
-            }
-        });
-
-        function installApp() {
-            if (deferredPrompt) {
-                deferredPrompt.prompt();
-                deferredPrompt.userChoice.then((choiceResult) => {
-                    deferredPrompt = null;
-                    hideInstallPrompt();
-                });
-            }
-        }
-
-        function hideInstallPrompt() {
-            document.getElementById('installPrompt').style.display = 'none';
-        }
-
-        // ===== DETECT MOBILE =====
+        // ===== DETECT MOBILE & CALCULATE PROPER SIZE =====
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-        const screenWidth = window.innerWidth;
-        const screenHeight = window.innerHeight;
+        
+        // Calculate game size based on 16:9 aspect ratio
+        function calculateGameSize() {
+            const windowWidth = window.innerWidth;
+            const windowHeight = window.innerHeight;
+            const aspectRatio = 16 / 9;
+            
+            let gameWidth, gameHeight;
+            
+            // Calculate based on window aspect ratio
+            if (windowWidth / windowHeight > aspectRatio) {
+                // Window is wider than 16:9
+                gameHeight = windowHeight;
+                gameWidth = gameHeight * aspectRatio;
+            } else {
+                // Window is taller than 16:9
+                gameWidth = windowWidth;
+                gameHeight = gameWidth / aspectRatio;
+            }
+            
+            return {
+                width: Math.floor(gameWidth),
+                height: Math.floor(gameHeight)
+            };
+        }
+        
+        const gameSize = calculateGameSize();
 
         // ===== GAME CONFIG =====
         const config = {
             type: Phaser.AUTO,
-            width: screenWidth,
-            height: screenHeight,
+            width: gameSize.width,
+            height: gameSize.height,
             parent: 'game-container',
             backgroundColor: '#2d5016',
             physics: {
@@ -274,7 +228,9 @@
             },
             scale: {
                 mode: Phaser.Scale.FIT,
-                autoCenter: Phaser.Scale.CENTER_BOTH
+                autoCenter: Phaser.Scale.CENTER_BOTH,
+                width: gameSize.width,
+                height: gameSize.height
             },
             scene: {
                 preload: preload,
@@ -290,6 +246,14 @@
                 game = new Phaser.Game(config);
             }
         }
+        
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            if (game) {
+                const newSize = calculateGameSize();
+                game.scale.resize(newSize.width, newSize.height);
+            }
+        });
 
         // ===== GLOBAL VARIABLES =====
         let player;
@@ -331,17 +295,21 @@
 
         // ===== CREATE =====
         function create() {
-            // World bounds
-            this.physics.world.setBounds(0, 0, 2000, 1500);
+            const { width, height } = this.scale;
+            
+            // World bounds - make it proportional to screen size
+            const worldWidth = width * 2.5;
+            const worldHeight = height * 2.5;
+            this.physics.world.setBounds(0, 0, worldWidth, worldHeight);
 
             // Create player
             createPlayer(this);
 
             // Create resources
-            createResources(this);
+            createResources(this, worldWidth, worldHeight);
 
             // Create enemies
-            createEnemies(this);
+            createEnemies(this, worldWidth, worldHeight);
 
             // Create UI
             createUI(this);
@@ -350,7 +318,6 @@
             if (isMobile) {
                 createMobileControls(this);
             } else {
-                // Desktop controls
                 cursors = this.input.keyboard.createCursorKeys();
                 this.wasd = this.input.keyboard.addKeys({
                     up: Phaser.Input.Keyboard.KeyCodes.W,
@@ -365,30 +332,28 @@
 
             // Camera
             this.cameras.main.startFollow(player);
-            this.cameras.main.setBounds(0, 0, 2000, 1500);
+            this.cameras.main.setBounds(0, 0, worldWidth, worldHeight);
 
-            // Check orientation
             checkOrientation();
-            
-            vibrate(VIBRATE.collect); // Welcome vibration
+            vibrate(VIBRATE.collect);
             showMessage('🎮 Selamat Datang! Survive as long as you can!');
         }
 
         // ===== CREATE MOBILE CONTROLS =====
         function createMobileControls(scene) {
-            const buttonSize = Math.min(screenWidth, screenHeight) * 0.12;
-            const joystickSize = Math.min(screenWidth, screenHeight) * 0.15;
+            const { width, height } = scene.scale;
+            const baseSize = Math.min(width, height);
+            const buttonSize = baseSize * 0.10;
+            const joystickSize = baseSize * 0.13;
 
             // Virtual Joystick
-            const joystickX = joystickSize + 30;
-            const joystickY = screenHeight - joystickSize - 30;
+            const joystickX = joystickSize + 20;
+            const joystickY = height - joystickSize - 20;
 
-            // Joystick base
             const joystickBase = scene.add.circle(joystickX, joystickY, joystickSize, 0x34495e, 0.3)
                 .setScrollFactor(0)
                 .setDepth(500);
 
-            // Joystick stick
             joystick = scene.add.circle(joystickX, joystickY, joystickSize * 0.5, 0x3498db, 0.7)
                 .setScrollFactor(0)
                 .setDepth(501)
@@ -422,29 +387,29 @@
             });
 
             // Action buttons (right side)
-            const btnSpacing = buttonSize + 20;
-            const btnStartX = screenWidth - buttonSize - 30;
-            const btnStartY = screenHeight - buttonSize - 30;
+            const btnSpacing = buttonSize + 15;
+            const btnStartX = width - buttonSize - 20;
+            const btnStartY = height - buttonSize - 20;
 
             // Attack button
             attackBtn = createButton(scene, btnStartX, btnStartY - btnSpacing, buttonSize, '⚔️', 0xe74c3c);
             attackBtn.on('pointerdown', () => {
                 attack(scene);
-                vibrate(VIBRATE.attack); // VIBRATE on attack!
+                vibrate(VIBRATE.attack);
             });
 
             // Eat button
             eatBtn = createButton(scene, btnStartX, btnStartY, buttonSize, '🍎', 0xf39c12);
             eatBtn.on('pointerdown', () => {
                 eatFood();
-                vibrate(VIBRATE.collect); // VIBRATE on eat!
+                vibrate(VIBRATE.collect);
             });
 
             // Craft button (top right)
-            craftBtn = createButton(scene, screenWidth - buttonSize - 20, buttonSize + 20, buttonSize * 0.8, '🔨', 0x27ae60);
+            craftBtn = createButton(scene, width - buttonSize - 15, buttonSize + 15, buttonSize * 0.8, '🔨', 0x27ae60);
             craftBtn.on('pointerdown', () => {
                 toggleCrafting();
-                vibrate(VIBRATE.hit); // VIBRATE on menu!
+                vibrate(VIBRATE.hit);
             });
 
             // Weapon switch buttons
@@ -502,13 +467,17 @@
             graphics.generateTexture('player', 32, 32);
             graphics.destroy();
 
-            player = scene.physics.add.sprite(500, 500, 'player');
+            const { width, height } = scene.scale;
+            const worldWidth = width * 2.5;
+            const worldHeight = height * 2.5;
+            
+            player = scene.physics.add.sprite(worldWidth / 2, worldHeight / 2, 'player');
             player.setCollideWorldBounds(true);
             player.body.setSize(28, 28);
         }
 
         // ===== CREATE RESOURCES =====
-        function createResources(scene) {
+        function createResources(scene, worldWidth, worldHeight) {
             // Trees
             const treeGraphics = scene.add.graphics();
             treeGraphics.fillStyle(0x27ae60, 1);
@@ -521,8 +490,8 @@
             trees = scene.physics.add.group();
             for (let i = 0; i < 30; i++) {
                 const tree = trees.create(
-                    Phaser.Math.Between(100, 1900),
-                    Phaser.Math.Between(100, 1400),
+                    Phaser.Math.Between(100, worldWidth - 100),
+                    Phaser.Math.Between(100, worldHeight - 100),
                     'tree'
                 );
                 tree.setImmovable(true);
@@ -541,8 +510,8 @@
             rocks = scene.physics.add.group();
             for (let i = 0; i < 25; i++) {
                 const rock = rocks.create(
-                    Phaser.Math.Between(100, 1900),
-                    Phaser.Math.Between(100, 1400),
+                    Phaser.Math.Between(100, worldWidth - 100),
+                    Phaser.Math.Between(100, worldHeight - 100),
                     'rock'
                 );
                 rock.setImmovable(true);
@@ -561,8 +530,8 @@
             berries = scene.physics.add.group();
             for (let i = 0; i < 20; i++) {
                 const berry = berries.create(
-                    Phaser.Math.Between(100, 1900),
-                    Phaser.Math.Between(100, 1400),
+                    Phaser.Math.Between(100, worldWidth - 100),
+                    Phaser.Math.Between(100, worldHeight - 100),
                     'berry'
                 );
                 berry.setImmovable(true);
@@ -574,7 +543,7 @@
         }
 
         // ===== CREATE ENEMIES =====
-        function createEnemies(scene) {
+        function createEnemies(scene, worldWidth, worldHeight) {
             const enemyGraphics = scene.add.graphics();
             enemyGraphics.fillStyle(0xe74c3c, 1);
             enemyGraphics.fillCircle(12, 12, 10);
@@ -587,16 +556,16 @@
             enemyGraphics.destroy();
 
             enemies = scene.physics.add.group();
-            spawnEnemies(scene, 3);
+            spawnEnemies(scene, 3, worldWidth, worldHeight);
 
             scene.physics.add.overlap(player, enemies, hitByEnemy, null, scene);
         }
 
-        function spawnEnemies(scene, count) {
+        function spawnEnemies(scene, count, worldWidth, worldHeight) {
             for (let i = 0; i < count; i++) {
                 const enemy = enemies.create(
-                    Phaser.Math.Between(100, 1900),
-                    Phaser.Math.Between(100, 1400),
+                    Phaser.Math.Between(100, worldWidth - 100),
+                    Phaser.Math.Between(100, worldHeight - 100),
                     'enemy'
                 );
                 enemy.health = 2;
@@ -606,12 +575,13 @@
 
         // ===== CREATE UI =====
         function createUI(scene) {
-            const fontSize = Math.max(12, screenWidth * 0.02);
-            const barWidth = Math.min(200, screenWidth * 0.25);
+            const { width, height } = scene.scale;
+            const fontSize = Math.max(14, width * 0.018);
+            const barWidth = Math.min(200, width * 0.22);
 
             // Health bar
-            const healthBarBg = scene.add.rectangle(10, 10, barWidth + 4, 20, 0x000000, 0.7).setOrigin(0, 0).setScrollFactor(0);
-            healthBar = scene.add.rectangle(12, 12, barWidth, 16, 0xe74c3c).setOrigin(0, 0).setScrollFactor(0);
+            const healthBarBg = scene.add.rectangle(10, 10, barWidth + 4, 22, 0x000000, 0.7).setOrigin(0, 0).setScrollFactor(0);
+            healthBar = scene.add.rectangle(12, 12, barWidth, 18, 0xe74c3c).setOrigin(0, 0).setScrollFactor(0);
             healthText = scene.add.text(15, 14, 'HP: 100', {
                 fontSize: fontSize + 'px',
                 fill: '#fff',
@@ -619,16 +589,16 @@
             }).setOrigin(0, 0).setScrollFactor(0);
 
             // Hunger bar
-            const hungerBarBg = scene.add.rectangle(10, 35, barWidth + 4, 20, 0x000000, 0.7).setOrigin(0, 0).setScrollFactor(0);
-            hungerBar = scene.add.rectangle(12, 37, barWidth, 16, 0xf39c12).setOrigin(0, 0).setScrollFactor(0);
-            hungerText = scene.add.text(15, 39, 'Hunger: 100', {
+            const hungerBarBg = scene.add.rectangle(10, 37, barWidth + 4, 22, 0x000000, 0.7).setOrigin(0, 0).setScrollFactor(0);
+            hungerBar = scene.add.rectangle(12, 39, barWidth, 18, 0xf39c12).setOrigin(0, 0).setScrollFactor(0);
+            hungerText = scene.add.text(15, 41, 'Hunger: 100', {
                 fontSize: fontSize + 'px',
                 fill: '#fff',
                 fontStyle: 'bold'
             }).setOrigin(0, 0).setScrollFactor(0);
 
             // Inventory
-            inventoryText = scene.add.text(10, 65, '', {
+            inventoryText = scene.add.text(10, 68, '', {
                 fontSize: (fontSize - 2) + 'px',
                 fill: '#fff',
                 backgroundColor: 'rgba(0,0,0,0.7)',
@@ -636,7 +606,7 @@
             }).setOrigin(0, 0).setScrollFactor(0);
 
             // Message
-            messageText = scene.add.text(screenWidth / 2, 20, '', {
+            messageText = scene.add.text(width / 2, 20, '', {
                 fontSize: (fontSize + 2) + 'px',
                 fill: '#f1c40f',
                 backgroundColor: 'rgba(0,0,0,0.8)',
@@ -644,13 +614,13 @@
             }).setOrigin(0.5, 0).setScrollFactor(0);
 
             // Day/Night overlay
-            dayNightOverlay = scene.add.rectangle(0, 0, screenWidth, screenHeight, 0x000033, 0)
+            dayNightOverlay = scene.add.rectangle(0, 0, width, height, 0x000033, 0)
                 .setOrigin(0, 0)
                 .setScrollFactor(0)
                 .setDepth(100);
 
             // Time display
-            scene.add.text(screenWidth - 10, 10, '', {
+            scene.add.text(width - 10, 10, '', {
                 fontSize: fontSize + 'px',
                 fill: '#fff',
                 backgroundColor: 'rgba(0,0,0,0.7)',
@@ -662,10 +632,11 @@
         }
 
         function createCraftingPanel(scene) {
-            const panelWidth = Math.min(400, screenWidth * 0.9);
-            const panelHeight = Math.min(400, screenHeight * 0.7);
-            const panelX = (screenWidth - panelWidth) / 2;
-            const panelY = (screenHeight - panelHeight) / 2;
+            const { width, height } = scene.scale;
+            const panelWidth = Math.min(380, width * 0.85);
+            const panelHeight = Math.min(380, height * 0.65);
+            const panelX = (width - panelWidth) / 2;
+            const panelY = (height - panelHeight) / 2;
 
             craftingPanel = scene.add.container(panelX, panelY).setScrollFactor(0).setDepth(200).setVisible(false);
 
@@ -703,7 +674,7 @@
 
                 craftBtn.on('pointerdown', () => {
                     craftItem(recipe);
-                    vibrate(VIBRATE.collect); // VIBRATE on craft!
+                    vibrate(VIBRATE.collect);
                 });
 
                 recipeContainer.add([recipeBg, recipeText, craftBtn]);
@@ -734,9 +705,7 @@
                 return;
             }
 
-            // Player movement
             player.setVelocity(0);
-
             const speed = 200;
 
             if (isMobile) {
@@ -762,7 +731,6 @@
 
             player.body.velocity.normalize().scale(speed);
 
-            // Enemy AI
             enemies.children.entries.forEach(enemy => {
                 if (!enemy.active) return;
 
@@ -775,7 +743,6 @@
                 }
             });
 
-            // Day/Night cycle
             gameTime += delta;
             const dayLength = 60000;
             const timeOfDay = (gameTime % dayLength) / dayLength;
@@ -788,8 +755,12 @@
                 const nightIntensity = (timeOfDay - 0.5) * 2;
                 dayNightOverlay.setAlpha(0.15 + nightIntensity * 0.55);
                 
+                const { width, height } = this.scale;
+                const worldWidth = width * 2.5;
+                const worldHeight = height * 2.5;
+                
                 if (timeOfDay > 0.7 && enemies.getLength() < 8 && Math.random() < 0.01) {
-                    spawnEnemies(this, 1);
+                    spawnEnemies(this, 1, worldWidth, worldHeight);
                 }
             }
 
@@ -799,7 +770,6 @@
                 timeText.setText(`${isDay ? '☀️' : '🌙'} ${hours}:00`);
             }
 
-            // Hunger
             if (Math.random() < 0.001) {
                 playerStats.hunger = Math.max(0, playerStats.hunger - 1);
                 updateStatsUI();
@@ -807,7 +777,7 @@
                 if (playerStats.hunger === 0 && Math.random() < 0.01) {
                     playerStats.health = Math.max(0, playerStats.health - 2);
                     updateStatsUI();
-                    vibrate(VIBRATE.damage); // VIBRATE on starvation!
+                    vibrate(VIBRATE.damage);
                     showMessage('⚠️ Kelaparan!');
                 }
             }
@@ -820,10 +790,10 @@
             if (resourceType === 'tree') {
                 if (resource.health > 0) {
                     resource.health--;
-                    vibrate(VIBRATE.hit); // VIBRATE on hit!
+                    vibrate(VIBRATE.hit);
                     if (resource.health === 0) {
                         playerStats.wood += playerStats.hasAxe ? 5 : 2;
-                        vibrate(VIBRATE.collect); // VIBRATE on collect!
+                        vibrate(VIBRATE.collect);
                         showMessage(`+${playerStats.hasAxe ? 5 : 2} 🪵`);
                         resource.destroy();
                     }
@@ -831,17 +801,17 @@
             } else if (resourceType === 'rock') {
                 if (resource.health > 0) {
                     resource.health--;
-                    vibrate(VIBRATE.hit); // VIBRATE on hit!
+                    vibrate(VIBRATE.hit);
                     if (resource.health === 0) {
                         playerStats.stone += 3;
-                        vibrate(VIBRATE.collect); // VIBRATE on collect!
+                        vibrate(VIBRATE.collect);
                         showMessage('+3 🪨');
                         resource.destroy();
                     }
                 }
             } else if (resourceType === 'berry') {
                 playerStats.food += 3;
-                vibrate(VIBRATE.collect); // VIBRATE on collect!
+                vibrate(VIBRATE.collect);
                 showMessage('+3 🍎');
                 resource.destroy();
             }
@@ -874,18 +844,18 @@
                     if (enemy.health <= 0) {
                         enemy.destroy();
                         playerStats.food += 2;
-                        vibrate(VIBRATE.attack); // VIBRATE on kill!
+                        vibrate(VIBRATE.attack);
                         showMessage('💀 +2 🍎');
                         updateInventoryUI();
                     } else {
-                        vibrate(VIBRATE.hit); // VIBRATE on hit!
+                        vibrate(VIBRATE.hit);
                         showMessage(`⚔️ Hit!`);
                     }
                 }
             });
 
             if (!hitSomething) {
-                vibrate([10]); // Small vibrate for miss
+                vibrate([10]);
             }
         }
 
@@ -893,7 +863,7 @@
             if (Math.random() < 0.02) {
                 playerStats.health = Math.max(0, playerStats.health - 10);
                 updateStatsUI();
-                vibrate(VIBRATE.damage); // VIBRATE on damage!
+                vibrate(VIBRATE.damage);
                 showMessage('💥 -10 HP!');
                 
                 const angle = Phaser.Math.Angle.Between(enemy.x, enemy.y, player.x, player.y);
@@ -932,7 +902,7 @@
                 
                 updateInventoryUI();
             } else {
-                vibrate([30, 20, 30]); // Error vibration
+                vibrate([30, 20, 30]);
                 showMessage('⚠️ Not enough!');
             }
         }
@@ -950,7 +920,9 @@
         }
 
         function updateStatsUI() {
-            const barWidth = Math.min(200, screenWidth * 0.25);
+            const { width } = game.scale;
+            const barWidth = Math.min(200, width * 0.22);
+            
             healthBar.width = (playerStats.health / 100) * barWidth;
             healthText.setText(`HP: ${playerStats.health}`);
             
@@ -976,20 +948,22 @@
 
         function gameOver(scene) {
             scene.physics.pause();
-            vibrate(VIBRATE.death); // VIBRATE on death!
+            vibrate(VIBRATE.death);
             
-            const overlay = scene.add.rectangle(0, 0, screenWidth, screenHeight, 0x000000, 0.8)
+            const { width, height } = scene.scale;
+            
+            const overlay = scene.add.rectangle(0, 0, width, height, 0x000000, 0.8)
                 .setOrigin(0, 0)
                 .setScrollFactor(0)
                 .setDepth(300);
             
-            const gameOverText = scene.add.text(screenWidth / 2, screenHeight / 2 - 50, '💀 GAME OVER', {
+            const gameOverText = scene.add.text(width / 2, height / 2 - 50, '💀 GAME OVER', {
                 fontSize: '48px',
                 fill: '#e74c3c',
                 fontStyle: 'bold'
             }).setOrigin(0.5).setScrollFactor(0).setDepth(301);
 
-            const statsText = scene.add.text(screenWidth / 2, screenHeight / 2 + 20,
+            const statsText = scene.add.text(width / 2, height / 2 + 20,
                 `Survived: ${Math.floor(gameTime / 1000)}s\n🪵 ${playerStats.wood} | 🪨 ${playerStats.stone}`,
                 {
                     fontSize: '20px',
@@ -998,7 +972,7 @@
                 }
             ).setOrigin(0.5).setScrollFactor(0).setDepth(301);
 
-            const restartText = scene.add.text(screenWidth / 2, screenHeight / 2 + 100, 'Refresh untuk restart', {
+            const restartText = scene.add.text(width / 2, height / 2 + 100, 'Refresh untuk restart', {
                 fontSize: '18px',
                 fill: '#f1c40f'
             }).setOrigin(0.5).setScrollFactor(0).setDepth(301);
