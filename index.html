@@ -193,13 +193,10 @@
             
             let gameWidth, gameHeight;
             
-            // Calculate based on window aspect ratio
             if (windowWidth / windowHeight > aspectRatio) {
-                // Window is wider than 16:9
                 gameHeight = windowHeight;
                 gameWidth = gameHeight * aspectRatio;
             } else {
-                // Window is taller than 16:9
                 gameWidth = windowWidth;
                 gameHeight = gameWidth / aspectRatio;
             }
@@ -261,8 +258,9 @@
         let trees, rocks, berries, enemies;
         
         // Mobile controls
-        let joystick;
+        let joystick, joystickBase;
         let attackBtn, eatBtn, craftBtn;
+        let weaponBtn1, weaponBtn2;
         let mobileControls = { x: 0, y: 0 };
         
         // Player stats
@@ -339,22 +337,25 @@
             showMessage('🎮 Selamat Datang! Survive as long as you can!');
         }
 
-        // ===== CREATE MOBILE CONTROLS =====
+        // ===== CREATE MOBILE CONTROLS (FIXED!) =====
         function createMobileControls(scene) {
             const { width, height } = scene.scale;
             const baseSize = Math.min(width, height);
-            const buttonSize = baseSize * 0.10;
-            const joystickSize = baseSize * 0.13;
+            const buttonSize = baseSize * 0.09;
+            const joystickSize = baseSize * 0.11;
+            const margin = 25; // Margin dari edge
 
-            // Virtual Joystick
-            const joystickX = joystickSize + 20;
-            const joystickY = height - joystickSize - 20;
+            // ===== LEFT SIDE - JOYSTICK (KIRI BAWAH) =====
+            const joystickX = joystickSize + margin;
+            const joystickY = height - joystickSize - margin; // BOTTOM position!
 
-            const joystickBase = scene.add.circle(joystickX, joystickY, joystickSize, 0x34495e, 0.3)
+            // Joystick base
+            joystickBase = scene.add.circle(joystickX, joystickY, joystickSize, 0x34495e, 0.4)
                 .setScrollFactor(0)
                 .setDepth(500);
 
-            joystick = scene.add.circle(joystickX, joystickY, joystickSize * 0.5, 0x3498db, 0.7)
+            // Joystick stick
+            joystick = scene.add.circle(joystickX, joystickY, joystickSize * 0.5, 0x3498db, 0.8)
                 .setScrollFactor(0)
                 .setDepth(501)
                 .setInteractive({ draggable: true });
@@ -386,42 +387,42 @@
                 mobileControls.y = 0;
             });
 
-            // Action buttons (right side)
+            // ===== RIGHT SIDE - ACTION BUTTONS (KANAN BAWAH) =====
             const btnSpacing = buttonSize + 15;
-            const btnStartX = width - buttonSize - 20;
-            const btnStartY = height - buttonSize - 20;
+            const btnStartX = width - buttonSize - margin;
+            const btnStartY = height - buttonSize - margin; // BOTTOM position!
 
-            // Attack button
+            // Attack button (kanan bawah)
             attackBtn = createButton(scene, btnStartX, btnStartY - btnSpacing, buttonSize, '⚔️', 0xe74c3c);
             attackBtn.on('pointerdown', () => {
                 attack(scene);
                 vibrate(VIBRATE.attack);
             });
 
-            // Eat button
+            // Eat button (kanan bawah paling bawah)
             eatBtn = createButton(scene, btnStartX, btnStartY, buttonSize, '🍎', 0xf39c12);
             eatBtn.on('pointerdown', () => {
                 eatFood();
                 vibrate(VIBRATE.collect);
             });
 
-            // Craft button (top right)
-            craftBtn = createButton(scene, width - buttonSize - 15, buttonSize + 15, buttonSize * 0.8, '🔨', 0x27ae60);
-            craftBtn.on('pointerdown', () => {
-                toggleCrafting();
-                vibrate(VIBRATE.hit);
-            });
-
-            // Weapon switch buttons
-            const weaponBtn1 = createButton(scene, btnStartX - btnSpacing, btnStartY - btnSpacing, buttonSize * 0.7, '🪓', 0x8b4513);
+            // ===== WEAPON SWITCH BUTTONS (di sebelah kiri attack/eat buttons) =====
+            weaponBtn1 = createButton(scene, btnStartX - btnSpacing, btnStartY - btnSpacing, buttonSize * 0.75, '🪓', 0x8b4513);
             weaponBtn1.on('pointerdown', () => {
                 equipWeapon('axe');
                 vibrate(VIBRATE.hit);
             });
 
-            const weaponBtn2 = createButton(scene, btnStartX - btnSpacing, btnStartY, buttonSize * 0.7, '🔱', 0x16a085);
+            weaponBtn2 = createButton(scene, btnStartX - btnSpacing, btnStartY, buttonSize * 0.75, '🔱', 0x16a085);
             weaponBtn2.on('pointerdown', () => {
                 equipWeapon('spear');
+                vibrate(VIBRATE.hit);
+            });
+
+            // ===== CRAFT BUTTON (kanan atas) =====
+            craftBtn = createButton(scene, width - buttonSize - margin, buttonSize + margin, buttonSize * 0.8, '🔨', 0x27ae60);
+            craftBtn.on('pointerdown', () => {
+                toggleCrafting();
                 vibrate(VIBRATE.hit);
             });
         }
